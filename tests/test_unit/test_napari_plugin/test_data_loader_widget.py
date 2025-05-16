@@ -31,7 +31,10 @@ from qtpy.QtWidgets import (
     QPushButton,
 )
 
-from movement.napari.loader_widgets import DataLoader
+from movement.napari.loader_widgets import (
+    SUPPORTED_BBOXES_FILES,
+    DataLoader,
+)
 
 
 # ------------------- tests for widget instantiation--------------------------#
@@ -200,6 +203,13 @@ def test_on_load_clicked_without_file_path(make_napari_viewer_proxy, capsys):
 
 
 @pytest.mark.parametrize(
+    "load_bboxes",
+    [
+        False,
+        True,
+    ],
+)
+@pytest.mark.parametrize(
     "filename, source_software, tracks_array_shape",
     [
         (
@@ -238,6 +248,7 @@ def test_on_load_clicked_with_valid_file_path(
     filename,
     source_software,
     tracks_array_shape,
+    load_bboxes,
     make_napari_viewer_proxy,
     caplog,
 ):
@@ -252,6 +263,9 @@ def test_on_load_clicked_with_valid_file_path(
     # Instantiate the napari viewer and the data loader widget
     viewer = make_napari_viewer_proxy()
     data_loader_widget = DataLoader(viewer)
+
+    if load_bboxes:
+        data_loader_widget.bboxes_checkbox.click()
 
     # Set the file path to a valid file
     file_path = pytest.DATA_PATHS.get(filename)
@@ -276,6 +290,10 @@ def test_on_load_clicked_with_valid_file_path(
     assert data_loader_widget.data is not None
     assert data_loader_widget.properties is not None
     assert data_loader_widget.data_not_nan is not None
+    if source_software in SUPPORTED_BBOXES_FILES and load_bboxes:
+        assert data_loader_widget.shapes is not None
+    else:
+        assert data_loader_widget.shapes is None
 
     # Check the style attributes are set
     assert data_loader_widget.color_property is not None
@@ -290,6 +308,10 @@ def test_on_load_clicked_with_valid_file_path(
     tracks_layer = viewer.layers[1]
     assert tracks_layer.name == f"tracks: {file_path.name}"
 
+    if source_software in SUPPORTED_BBOXES_FILES and load_bboxes:
+        shapes_layer = viewer.layers[2]
+        assert shapes_layer.name == f"shapes: {file_path.name}"
+
     # Check that the points layer is set as active
     assert viewer.layers.selection.active == points_layer
 
@@ -303,6 +325,14 @@ def test_on_load_clicked_with_valid_file_path(
         "Added tracked dataset as a napari Points layer.",
         "Added tracked dataset as a napari Tracks layer.",
     }
+    if source_software in SUPPORTED_BBOXES_FILES and load_bboxes:
+        expected_log_messages.add(
+            "Added tracked dataset as a napari Shapes layer."
+        )
+    if source_software not in SUPPORTED_BBOXES_FILES and load_bboxes:
+        expected_log_messages.add(
+            f"{source_software} to bboxes not supported."
+        )
     log_messages = {record.getMessage() for record in caplog.records}
     assert expected_log_messages <= log_messages
 
